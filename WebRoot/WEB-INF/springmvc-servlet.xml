@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>  
+<beans xmlns="http://www.springframework.org/schema/beans"  
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"   
+    xmlns:p="http://www.springframework.org/schema/p"  
+    xmlns:context="http://www.springframework.org/schema/context"  
+    xmlns:mvc="http://www.springframework.org/schema/mvc" 
+    xmlns:aop="http://www.springframework.org/schema/aop" 
+    xmlns:tx="http://www.springframework.org/schema/tx"
+    xmlns:util="http://www.springframework.org/schema/util"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans   
+        				http://www.springframework.org/schema/beans/spring-beans-3.0.xsd  
+        				http://www.springframework.org/schema/context   
+        				http://www.springframework.org/schema/context/spring-context-3.0.xsd  
+        				http://www.springframework.org/schema/mvc   
+        				http://www.springframework.org/schema/mvc/spring-mvc-3.0.xsd
+        				http://www.springframework.org/schema/aop   
+                        http://www.springframework.org/schema/aop/spring-aop-2.5.xsd
+                        http://www.springframework.org/schema/util 
+                        http://www.springframework.org/schema/util/spring-util.xsd   
+                        http://www.springframework.org/schema/tx   
+                        http://www.springframework.org/schema/tx/spring-tx-2.5.xsd">
+    <!-- 开启注解处理器 -->
+	<context:annotation-config/>
+	
+ 	<context:component-scan base-package="com.ideamoment.*"/> 
+   
+    <bean class="org.springframework.web.servlet.mvc.annotation.DefaultAnnotationHandlerMapping"/> 
+ 
+    <bean class="com.ideamoment.ideadp.restful.IdeaAnnotationMethodHandlerAdapter">
+        <property name="messageConverters">
+            <array>
+                <ref bean="fastJsonHttpMessageConverter"/>
+            </array>
+        </property>
+    </bean>
+    
+    <bean id="exceptionResolver" class="com.ideamoment.ideadp.exception.IdeaExceptionHandler"></bean>
+    
+    <bean id="multipartResolver" class="org.springframework.web.multipart.commons.CommonsMultipartResolver"/>
+    
+    <bean id="ideaJdbcInitBean"
+          class="com.ideamoment.ideajdbc.spring.IdeaJdbcInitializingBean">
+          <property name="config" value="ideajdbc.properties"></property>
+    </bean>
+     
+    <!-- 注册一个JDBC数据源事务管理器 -->  
+    <aop:aspectj-autoproxy proxy-target-class="true"></aop:aspectj-autoproxy>
+    <bean id="ideaJdbcTxAspect" class="com.ideamoment.ideajdbc.spring.IdeaJdbcTransactionAspect" /> 
+    
+    <bean id="fastJsonHttpMessageConverter"
+        class="com.alibaba.fastjson.support.spring.FastJsonHttpMessageConverter">
+
+        <property name="supportedMediaTypes">
+            <list>
+                <value>application/json;charset=UTF-8</value>
+                <value>text/html;charset=UTF-8</value><!-- 避免IE出现下载JSON文件的情况 -->
+            </list>
+        </property>
+        <property name="features">
+            <list>
+                <value>QuoteFieldNames</value>
+                <value>WriteDateUseDateFormat</value>
+            </list>
+        </property>
+    </bean>
+    
+    <bean id="shiroFilter" class="org.apache.shiro.spring.web.ShiroFilterFactoryBean">  
+        <property name="securityManager" ref="securityManager"/>  
+        <!-- 登陆页面的连接 -->  
+        <property name="loginUrl" value="/toLogin"/>  
+        <!-- 身份验证后跳转的连接 -->  
+        <property name="successUrl" value="/index.jsp"/>  
+        <property name="unauthorizedUrl" value="/login.jsp"/>  
+        <property name="filters">  
+            <util:map>  
+                <entry key="authc" value-ref="ideaSamlFilter"></entry>  
+            </util:map>  
+        </property>   
+        <property name="filterChainDefinitions">  
+            <value>  
+                /login=anon
+                /toLogin=anon
+                /consoleLogin.jsp=anon
+                /console/login=anon
+                /register.jsp=anon
+                /register=anon
+                /toSSOLogin=anon
+                /ssologin=anon
+                /ssologout=anon
+                /**=authc
+            </value>  
+        </property>  
+    </bean>
+    
+    <bean id="ideaSamlFilter" class="com.ideamoment.wanr.usercenter.sso.filter.IdeaSamlAuthenticationFilter">
+        <property name="userService">
+            <ref bean="userService"/>
+        </property>
+    </bean>  
+    
+    <bean id="securityManager" class="com.ideamoment.wanr.usercenter.shiro.manager.IdeaShiroSecurityManager">  
+        <property name="authenticator" ref="modularAuthricator"/>
+        
+        <!-- sessionManager -->
+	    <property name="sessionManager" ref="sessionManager" />
+	
+	    <!-- cacheManager -->
+	    <property name="cacheManager" ref="cacheManager" />
+	    
+        <property name="userService">
+            <ref bean="userService"/>
+        </property>
+    </bean>  
+      
+    <bean id="modularAuthricator" class="org.apache.shiro.authc.pam.ModularRealmAuthenticator">
+        <property name="authenticationStrategy" ref="firstSuccess"/>
+        <property name="realms">
+           <list>
+             <ref bean="wanrRealm"/>
+             <!--<ref bean="consoleRealm"/>-->
+           </list>
+        </property>
+    </bean>
+    <bean id="firstSuccess" class="org.apache.shiro.authc.pam.FirstSuccessfulStrategy"/>
+      
+     <!-- 保证实现了Shiro内部lifecycle函数的bean执行 -->  
+    <bean id="lifecycleBeanPostProcessor" class="org.apache.shiro.spring.LifecycleBeanPostProcessor"/>
+    
+    
+    <!-- shiro redisManager -->
+	<bean id="redisManager" class="com.ideamoment.shirocache.redis.RedisManager">
+	    <property name="host" value="127.0.0.1"/>
+	    <property name="port" value="6379"/>
+	    <property name="expire" value="1800"/>
+	    <!-- optional properties:
+	    <property name="timeout" value="10000"/>
+	    <property name="password" value="123456"/>
+	    -->
+	</bean>
+	
+	<!-- redisSessionDAO -->
+	<bean id="redisSessionDAO" class="com.ideamoment.shirocache.redis.RedisSessionDAO">
+	    <property name="redisManager" ref="redisManager" />
+	</bean>
+	
+	<!-- sessionManager -->
+	<bean id="sessionManager" class="org.apache.shiro.web.session.mgt.DefaultWebSessionManager">
+	    <property name="sessionDAO" ref="redisSessionDAO" />
+	</bean>
+	
+	<!-- cacheManager -->
+	<bean id="cacheManager" class="com.ideamoment.shirocache.redis.RedisCacheManager">
+	    <property name="redisManager" ref="redisManager" />
+	</bean>
+</beans>
